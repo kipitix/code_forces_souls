@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 )
 
@@ -14,29 +15,32 @@ func main() {
 	scanner.Scan()
 	n, _ := strconv.Atoi(scanner.Text())
 
-	fmt.Println(n)
+	coins := make([]int, n)
+	allSum := 0
 
-	// Coins values sorted in decreased sequence
-	coins := []int{}
-	sum := 0
-
-	for scanner.Scan() {
+	for i := range n {
+		scanner.Scan()
 		coin, _ := strconv.Atoi(scanner.Text())
-		sum += coin
 
-		//
-		insertPosition := len(coins)
-		for i, v := range coins {
-			if v < coin {
-				insertPosition = i
-			}
-		}
+		allSum += coin
 
+		coins[i] = coin
 	}
 
 	if err := scanner.Err(); err != nil {
 		panic(err)
 	}
 
-	fmt.Println(sum)
+	slices.Sort(coins)
+
+	targetSum := allSum/2 + 1
+	minCoinsCount := 0
+	mySum := 0
+
+	for i := n - 1; i >= 0 && mySum < targetSum; i-- {
+		mySum += coins[i]
+		minCoinsCount++
+	}
+
+	fmt.Println(minCoinsCount)
 }
