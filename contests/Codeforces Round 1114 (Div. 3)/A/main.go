@@ -23,6 +23,11 @@ func main() {
 		scanner.Scan()
 		startCoinsCount[2], _ = strconv.Atoi(scanner.Text())
 
+		if startCoinsCount[0] == startCoinsCount[1] || startCoinsCount[0] == startCoinsCount[2] || startCoinsCount[1] == startCoinsCount[2] {
+			fmt.Println(0)
+			continue
+		}
+
 		fmt.Println(solveCase(startCoinsCount[:]))
 	}
 
