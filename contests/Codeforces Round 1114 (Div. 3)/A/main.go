@@ -23,11 +23,6 @@ func main() {
 		scanner.Scan()
 		startCoinsCount[2], _ = strconv.Atoi(scanner.Text())
 
-		if startCoinsCount[0] == startCoinsCount[1] || startCoinsCount[0] == startCoinsCount[2] || startCoinsCount[1] == startCoinsCount[2] {
-			fmt.Println(0)
-			continue
-		}
-
 		fmt.Println(solveCase(startCoinsCount[:]))
 	}
 
@@ -36,20 +31,26 @@ func main() {
 	}
 }
 
-// Находим пары стопок с минимальной разницей и пытаемся их уровнять.
-// Идём от наименьшей разницы к наибольшей и проверяем можно ли решить.
-// Для каждой пары:
-// Оцениваем разность.
-// Если разница чётная, то можно достичь равенства переместив половину разницы на другую стопку.
-// Если разница нечётна, то перемещаем целую часть половины разности и ещё одну монету с соседней стопки - там всегда должна быть хотя бы одна.
-func solveCase(startCoinsCount []int) int {
+func solveCase(coinsCount []int) int {
 
-	slices.Sort(startCoinsCount)
+	roundsCount := 0
 
-	diff := startCoinsCount[1] - startCoinsCount[0]
-	if diff%2 == 0 {
-		return diff / 2
-	} else {
-		return diff/2 + 1
+	for coinsCount[0] != coinsCount[1] && coinsCount[0] != coinsCount[2] && coinsCount[1] != coinsCount[2] {
+
+		slices.Sort(coinsCount)
+
+		diffHiMid := coinsCount[2] - coinsCount[1]
+		diffLoMid := coinsCount[1] - coinsCount[0]
+
+		optimalDiff := diffHiMid
+		if optimalDiff > diffLoMid {
+			optimalDiff = diffLoMid
+		}
+
+		coinsCount[2] -= optimalDiff
+		coinsCount[0] += optimalDiff
+		roundsCount += optimalDiff
 	}
+
+	return roundsCount
 }
