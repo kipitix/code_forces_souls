@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	scannerBufferSize = 1024 * 20
+	scannerBufferSize = 1024 * 1024
 )
 
 func main() {
