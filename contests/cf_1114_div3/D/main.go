@@ -66,11 +66,11 @@ func solve(valuesIndexes map[int][]int, numCount int) []int {
 	slices.Sort(values)
 	// Обоити все
 	// Исключение - если всё заполнено одним значением (это должен быть 0)
+	// это должен быть 0 - иначе решения нет
+	if values[0] != 0 {
+		return nil
+	}
 	if len(values) < 2 {
-		// это должен быть 0 - иначе решения нет
-		if values[0] != 0 {
-			return nil
-		}
 		// Генерируем ответ - все 1
 		result[0] = 1
 		// Exponentially duplicate the data block
@@ -88,7 +88,7 @@ func solve(valuesIndexes map[int][]int, numCount int) []int {
 			return nil
 		}
 		targetValue := (shadow - prevShadow) / len(valuesIndexes[prevShadow])
-		if targetValue < lastValue {
+		if targetValue <= lastValue {
 			return nil
 		}
 		lastValue = targetValue
