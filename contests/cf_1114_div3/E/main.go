@@ -3,9 +3,9 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"math"
 	"os"
 	"slices"
+	"sort"
 	"strconv"
 )
 
@@ -21,12 +21,8 @@ func main() {
 		scanner.Scan()
 		numCount, _ := strconv.Atoi(scanner.Text())
 
-		// Исходный перемешанный массив разностей
 		arrayB := make([]int, numCount)
-		// Сумма всех элементов исходного массива - равна значению последнего элемента
 		arrayBSum := 0
-		// arrayBMin := math.MaxInt
-		// arrayBMax := math.MinInt
 
 		for numI := 0; numI < numCount; numI++ {
 
@@ -34,18 +30,7 @@ func main() {
 			num, _ := strconv.Atoi(scanner.Text())
 			arrayB[numI] = num
 			arrayBSum += num
-			// if num > arrayBMax {
-			// 	arrayBMax = num
-			// }
-			// if num < arrayBMin {
-			// 	arrayBMin = num
-			// }
 		}
-
-		// fmt.Println(arrayBSum, arrayBMin, arrayBMax, arrayBMax+arrayBMin)
-
-		// diff = Ai - Ai - 1
-		// Ai - 1 = Ai - diff
 
 		result := solve(arrayB, arrayBSum)
 		if result == nil {
@@ -65,62 +50,38 @@ func main() {
 }
 
 func solve(arrayB []int, arrayBSum int) []int {
-	// fmt.Println("---")
-	// fmt.Println(arrayB)
+	n := len(arrayB)
 
 	if arrayBSum < 1 {
 		return nil
 	}
 
-	result := make([]int, len(arrayB))
-	slices.Sort(arrayB)
+	sortedVals := append([]int(nil), arrayB...)
+	slices.Sort(sortedVals)
 
-	firstElement := math.MaxInt
-	firstElementIndexInArrayB := -1
-	for index, value := range arrayB {
-		if value < firstElement && value > 0 {
-			firstElement = value
-			firstElementIndexInArrayB = index
+	parent := make([]int, n+1)
+	for i := range parent {
+		parent[i] = i
+	}
+	var find func(int) int
+	find = func(x int) int {
+		for parent[x] != x {
+			parent[x] = parent[parent[x]]
+			x = parent[x]
 		}
-		if value == 1 {
-			break
-		}
+		return x
 	}
 
-	arrayB = append(arrayB[:firstElementIndexInArrayB], arrayB[firstElementIndexInArrayB+1:]...)
+	result := make([]int, n)
+	sum := 0
+	for k := 0; k < n; k++ {
+		threshold := -sum
+		idx := sort.Search(n, func(i int) bool { return sortedVals[i] > threshold })
+		idx = find(idx)
 
-	// fmt.Println(arrayB)
-	headIndex := 0
-	tailIndex := len(arrayB) - 1
-
-	result[0] = firstElement
-	result[len(result)-1] = arrayBSum
-	for resultIndex := len(result) - 2; resultIndex > 0; resultIndex-- {
-		prevValue := result[resultIndex+1]
-		variant1 := prevValue - arrayB[headIndex]
-		variant2 := prevValue - arrayB[tailIndex]
-		if variant1 < 1 && variant2 < 1 {
-			return nil
-		}
-		if variant1 < 1 {
-			result[resultIndex] = variant2
-			tailIndex--
-			continue
-		}
-		if variant2 < 1 {
-			result[resultIndex] = variant1
-			headIndex++
-			continue
-		}
-		if variant1 < variant2 {
-			result[resultIndex] = variant1
-			headIndex++
-			continue
-		} else {
-			result[resultIndex] = variant2
-			tailIndex--
-			continue
-		}
+		sum += sortedVals[idx]
+		result[k] = sum
+		parent[idx] = idx + 1
 	}
 
 	return result
