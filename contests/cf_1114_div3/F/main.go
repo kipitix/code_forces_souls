@@ -1,130 +1,99 @@
 package main
 
-const (
-	maxBits = 31
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"slices"
+	"strconv"
 )
 
 func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Split(bufio.ScanWords)
 
-}
+	scanner.Scan()
+	testCount, _ := strconv.Atoi(scanner.Text())
 
-func solve(a []int, b []int, size int) bool {
-	// Вычисляем массив C, на основании которого будем оценивать достижимость решения
-	c := make([]int, size)
-	for i := range a {
-		c[i] = a[i] ^ b[i]
-	}
-	// Создаём 2 базиса
-	// Straight Basis Operator
-	sbo := NewXorBasisOperator(maxBits, size+1)
-	// Reverse Basis Operator
-	rbo := NewXorBasisOperator(maxBits, size+1)
-	// Заполняем SBO всеми элементами из A, исключая последний
-	for i := 0; i < size-1; i++ {
-		sbo.Add(a[i])
-	}
-	// Проходим в обратном порядке смотря на массив C, используя для оценки массив A
-	// и объединённые базисы
-	for i := size - 1; i >= 0; i-- {
-		// Проверяем значение
-		mergedBasis := sbo.Basis().Merge(rbo.Basis())
-		if !mergedBasis.Check(c[i]) {
-			return false
+	for range testCount {
+		scanner.Scan()
+		n, _ := strconv.Atoi(scanner.Text())
+
+		a := make([]int, n)
+		for i := range a {
+			scanner.Scan()
+			a[i], _ = strconv.Atoi(scanner.Text())
 		}
-		// Корректируем базисы
-		sbo.Rewind()
-		rbo.Add(a[i])
+
+		b := make([]int, n)
+		for i := range b {
+			scanner.Scan()
+			b[i], _ = strconv.Atoi(scanner.Text())
+		}
+
+		if solve(a, b) {
+			fmt.Println("YES")
+		} else {
+			fmt.Println("NO")
+		}
 	}
-	return true
+
+	if err := scanner.Err(); err != nil {
+		panic(err)
+	}
 }
 
-// XOR Базис - хранит базис и позволяет 2 операции с ним
-type XorBasis []int
+// solve определяет, можно ли преобразовать массив a в массив b.
+//
+// Ключевое наблюдение (из разбора задачи): любая последовательность операций
+// приводит к массиву, который является перестановкой либо исходного массива a,
+// либо массива, полученного из a ровно одной операцией.
+//
+// Одна операция с выбранным элементом a_i меняет общий XOR массива на a_i
+// (так как n чётно, то n-1 нечётно): S' = S XOR a_i. Значит необходимый
+// элемент равен x = S_a XOR S_b.
+func solve(a []int, b []int) bool {
+	sa := 0
+	for _, v := range a {
+		sa ^= v
+	}
+	sb := 0
+	for _, v := range b {
+		sb ^= v
+	}
 
-// Проверить возможность составления значения на основании базиса
-func (xb XorBasis) Check(value int) bool {
-	if value == 0 {
-		// Проверка на то, что базис НЕ пустой
-		// return !xb.IsZero()
+	sortedA := slices.Clone(a)
+	slices.Sort(sortedA)
+	sortedB := slices.Clone(b)
+	slices.Sort(sortedB)
+
+	// Случай 0 операций: b является перестановкой a.
+	if slices.Equal(sortedA, sortedB) {
 		return true
 	}
-	for index := len(xb) - 1; index >= 0; index-- {
-		if (value>>index)&1 == 1 {
-			if xb[index] == 0 {
-				return false
-			}
-			value ^= xb[index]
+
+	// Иначе b обязано быть перестановкой результата ровно одной операции.
+	x := sa ^ sb
+
+	idx := -1
+	for i, v := range a {
+		if v == x {
+			idx = i
+			break
 		}
 	}
-	return value == 0
-}
+	if idx == -1 {
+		return false
+	}
 
-// Проверка, что базис пустой
-func (xb XorBasis) IsZero() bool {
-	for _, v := range xb {
-		if v != 0 {
-			return false
+	// Применяем операцию к индексу idx: XOR элемента x во все остальные.
+	c := slices.Clone(a)
+	for i := range c {
+		if i != idx {
+			c[i] ^= x
 		}
 	}
-	return true
-}
+	slices.Sort(c)
 
-// Объединить 2 базиса
-func (xb XorBasis) Merge(other XorBasis) XorBasis {
-	// Merged Basis Operator
-	mbo := NewXorBasisOperator(len(xb), len(xb)*2+1)
-	for _, v := range xb {
-		mbo.Add(v)
-	}
-	for _, v := range other {
-		mbo.Add(v)
-	}
-	return mbo.Basis()
-}
-
-// Оператор XOR базиса
-// Формирует базис на основании данных подаваемых в него
-// Умеет делать шаг назад за счёт хранения истории базиса
-type XorBasisOperator struct {
-	maxBits           int
-	basisStory        []XorBasis
-	currentBasisIndex int
-}
-
-// Создание нового оператора базиса
-func NewXorBasisOperator(maxBits int, storyCapacity int) *XorBasisOperator {
-	xb := &XorBasisOperator{
-		maxBits:           maxBits,
-		basisStory:        make([]XorBasis, storyCapacity),
-		currentBasisIndex: 0,
-	}
-	for i := 0; i < storyCapacity; i++ {
-		xb.basisStory[i] = make([]int, maxBits)
-	}
-	return xb
-}
-
-// Текущий базис
-func (xbo *XorBasisOperator) Basis() XorBasis {
-	return xbo.basisStory[xbo.currentBasisIndex]
-}
-
-// Добавить новое значение базиса с сохранением истории
-func (xbo *XorBasisOperator) Add(value int) {
-	copy(xbo.basisStory[xbo.currentBasisIndex+1], xbo.basisStory[xbo.currentBasisIndex])
-	xbo.currentBasisIndex++
-	for i := xbo.maxBits - 1; i >= 0; i-- {
-		if (value>>i)&1 == 1 {
-			if xbo.basisStory[xbo.currentBasisIndex][i] == 0 {
-				xbo.basisStory[xbo.currentBasisIndex][i] = value
-				return
-			}
-			value ^= xbo.basisStory[xbo.currentBasisIndex][i]
-		}
-	}
-}
-
-// Отмотать историю на один шаг назад
-func (xbo *XorBasisOperator) Rewind() {
-	xbo.currentBasisIndex--
+	return slices.Equal(c, sortedB)
 }
