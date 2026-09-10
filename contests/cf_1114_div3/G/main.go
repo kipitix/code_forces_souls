@@ -2,289 +2,178 @@ package main
 
 import (
 	"bufio"
-	"cmp"
-	"fmt"
 	"os"
-	"slices"
+	"sort"
 	"strconv"
-	"strings"
 )
 
-func main() {
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Split(bufio.ScanWords)
+// Бинарная min-куча на срезе int без boxing.
+type IntHeap []int
 
-	scanner.Scan()
-	caseCount, _ := strconv.Atoi(scanner.Text())
-
-	for range caseCount {
-		scanner.Scan()
-		nodeCount, _ := strconv.Atoi(scanner.Text())
-		nodesWeights := make([]int, nodeCount)
-		nodesParents := make([]int, nodeCount-1)
-		for i := range nodeCount {
-			scanner.Scan()
-			nodesWeights[i], _ = strconv.Atoi(scanner.Text())
+func (h *IntHeap) Push(x int) {
+	*h = append(*h, x)
+	i := len(*h) - 1
+	arr := *h
+	for i > 0 {
+		parent := (i - 1) / 2
+		if arr[parent] <= arr[i] {
+			break
 		}
-		for i := range nodeCount - 1 {
-			scanner.Scan()
-			nodesParents[i], _ = strconv.Atoi(scanner.Text())
-		}
-
-		root := CreateTree(nodeCount, nodesWeights, nodesParents)
-		result := Solve(root, nodeCount)
-		for i, v := range result {
-			if i == len(result)-1 {
-				fmt.Println(v)
-			} else {
-				fmt.Printf("%d ", v)
-			}
-		}
-	}
-
-	if scanner.Err() != nil {
-		panic(scanner.Err())
+		arr[parent], arr[i] = arr[i], arr[parent]
+		i = parent
 	}
 }
 
-// Поиск решения кейса.
-func Solve(root *Node, nodeCount int) []int {
-	result := make([]int, nodeCount)
-
-	// root.PrintTree()
-	groups := InitGroups(root)
-
-	// for i, g := range groups {
-	// 	g.PrintGroup(i + 1)
-	// }
-
-	startGroupsCount := len(groups)
-
-	for i := range startGroupsCount - 1 {
-		result[i] = -1
+func (h *IntHeap) Pop() int {
+	arr := *h
+	top := arr[0]
+	n := len(arr)
+	arr[0] = arr[n-1]
+	arr = arr[:n-1]
+	*h = arr
+	i := 0
+	for {
+		left := 2*i + 1
+		if left >= len(arr) {
+			break
+		}
+		smallest := left
+		right := left + 1
+		if right < len(arr) && arr[right] < arr[left] {
+			smallest = right
+		}
+		if arr[i] <= arr[smallest] {
+			break
+		}
+		arr[i], arr[smallest] = arr[smallest], arr[i]
+		i = smallest
 	}
-	result[startGroupsCount-1] = SumGroups(groups)
+	return top
+}
 
-	for i := startGroupsCount; i < nodeCount; i++ {
-		groups2, diff := SplitGroups(groups)
-		groups = groups2
+// Слияние двух куч по принципу "маленькое в большое".
+func mergeHeaps(dst, src *IntHeap) *IntHeap {
+	if dst == nil {
+		return src
+	}
+	if src == nil {
+		return dst
+	}
+	if len(*dst) < len(*src) {
+		dst, src = src, dst
+	}
+	for _, v := range *src {
+		dst.Push(v)
+	}
+	return dst
+}
 
-		result[i] = result[i-1] + diff
+func solve(n int, a []int, parent []int) []int {
+	// parent[i] - 0-индексированный родитель узла i (для i>=1), parent[0] не используется.
+	heaps := make([]*IntHeap, n)
+	spares := make([]int, 0, n)
 
-		// for i, g := range groups {
-		// 	g.PrintGroup(i + 1)
-		// }
+	for i := n - 1; i >= 1; i-- {
+		finalize(i, a, heaps, &spares)
+		p := parent[i]
+		heaps[p] = mergeHeaps(heaps[p], heaps[i])
+		heaps[i] = nil
+	}
+	finalize(0, a, heaps, &spares)
 
+	root := heaps[0]
+	leafCount := len(*root)
+
+	sum := 0
+	for _, v := range *root {
+		sum += v
+	}
+
+	sort.Sort(sort.Reverse(sort.IntSlice(spares)))
+
+	result := make([]int, n)
+	for k := 1; k < leafCount; k++ {
+		result[k-1] = -1
+	}
+
+	acc := sum
+	result[leafCount-1] = sum
+	for k := leafCount + 1; k <= n; k++ {
+		acc += spares[k-leafCount-1]
+		result[k-1] = acc
 	}
 
 	return result
 }
 
-// Создание дерева на основании входных данных.
-// На выходе получаем указатель на вершину.
-func CreateTree(nodeCount int, nodesWeights []int, nodesParents []int) *Node {
-	if nodeCount < 1 {
-		return nil
-	}
-	allNodes := make([]*Node, nodeCount)
-	for i := 0; i < nodeCount; i++ {
-		allNodes[i] = &Node{
-			index:    i,
-			weight:   nodesWeights[i],
-			children: nil,
-			parent:   nil,
-		}
-	}
-	for i := 0; i < nodeCount-1; i++ {
-		childNode := allNodes[i+1]
-		parentNodeIndex := nodesParents[i] - 1
-		parentNode := allNodes[parentNodeIndex]
-
-		parentNode.children = append(parentNode.children, childNode)
-		childNode.parent = parentNode
-	}
-	return allNodes[0]
-}
-
-// Инициализация групп.
-// Разбиение группы по правилам задачи.
-// Создание групп по количеству листьев дерева.
-func InitGroups(root *Node) []*Group {
-	groups, _ := findSubgroups(root)
-	// Нужно отсортировать элементы в группах.
-	// Сортировать буду по возрастанию, чтобы убирать последний.
-	for _, g := range groups {
-		slices.SortFunc(g.nodes, func(a, b *Node) int {
-			return cmp.Compare(a.weight, b.weight)
-		})
-	}
-	return groups
-}
-
-// Поиск подгрупп, включая корень.
-// После поиска, корень окажется в одной из подгрупп.
-// Корень попадает в подгруппу для которой он может иметь значение.
-// Если корень перевешивает вес всей подгруппы, то он добавляется в неё.
-func findSubgroups(node *Node) ([]*Group, *Group) {
-	// Если дочерних элементов нет, то создаём новую группу
-	// с одним собой.
-	if len(node.children) == 0 {
-		newGroup := &Group{
-			nodes:     []*Node{node},
-			maxWeight: node.weight,
-		}
-		// node.group = newGroup
-		return []*Group{newGroup}, newGroup
-	}
-	// Собираем информацию о подгруппах у дочерних элементов.
-	groups := make([]*Group, 0)
-	chainedGroups := make([]*Group, 0)
-	for _, childNode := range node.children {
-		allChildGroups, childChainedGroup := findSubgroups(childNode)
-		groups = append(groups, allChildGroups...)
-		chainedGroups = append(chainedGroups, childChainedGroup)
-	}
-	// Находим в какую группу нужно включить себя.
-	slices.SortFunc(chainedGroups, func(a, b *Group) int {
-		return cmp.Compare(a.maxWeight, b.maxWeight)
-	})
-	chainedGroup := chainedGroups[0]
-	chainedGroup.nodes = append(chainedGroup.nodes, node)
-	// node.group = chainedGroup
-	if node.weight > chainedGroup.maxWeight {
-		chainedGroup.maxWeight = node.weight
-	}
-
-	return groups, chainedGroup
-}
-
-// Суммируем значения максимальных весов всех групп.
-func SumGroups(groups []*Group) int {
-	sum := 0
-	for _, g := range groups {
-		sum += g.maxWeight
-	}
-	return sum
-}
-
-// Поиск группы, которую наиболее эффективно было бы разбить.
-// Число групп должно увеличиться на 1.
-// Вход: Текущие группы.
-// Выход: Новые группы, на сколько изменилась сумма весов групп.
-func SplitGroups(groupsInput []*Group) ([]*Group, int) {
-	activeGroups := []*Group{}
-	// Удаление из оценки групп с одним элементом.
-	for _, g := range groupsInput {
-		if len(g.nodes) > 1 {
-			activeGroups = append(activeGroups, g)
-		}
-	}
-	// Нужно отсортировать группы.
-	// Сортируем группы так, чтобы первой оказалась
-	// группа с максимальным узлом среди всех вторых элементов
-	// всех групп.
-	slices.SortFunc(activeGroups, func(a, b *Group) int {
-		return cmp.Compare(a.nodes[len(a.nodes)-1].weight, b.nodes[len(b.nodes)-1].weight)
-	})
-	// После такой сортировки берём последнюю группу.
-	// Убираем в ней последний элемент и считаем что вес всех
-	// групп увеличился на значение веса предпоследнего элемента.
-	lastGroupIndex := len(activeGroups) - 1
-	activeGroups[lastGroupIndex].nodes = activeGroups[lastGroupIndex].nodes[:len(activeGroups[lastGroupIndex].nodes)-1]
-	sumWeightDiff := activeGroups[lastGroupIndex].nodes[len(activeGroups[lastGroupIndex].nodes)-1].weight
-	return activeGroups, sumWeightDiff
-}
-
-// Узел дерева.
-type Node struct {
-	index    int
-	weight   int
-	children []*Node
-	parent   *Node
-	// group    *Group
-}
-
-// Вывод отладочной информации.
-func (n *Node) PrintTree() {
-	if n == nil {
-		fmt.Println("Tree is nil")
+// Обрабатывает узел i: если это лист (heaps[i] == nil), создаёт кучу из одного
+// элемента. Иначе извлекает минимум из объединённой кучи потомков, сравнивает
+// со значением узла и одно из двух значений откладывает как "запасное".
+func finalize(i int, a []int, heaps []*IntHeap, spares *[]int) {
+	if heaps[i] == nil {
+		h := IntHeap{a[i]}
+		heaps[i] = &h
 		return
 	}
-	n.printTreeDetailed("", true)
-}
-
-// Дополнительная функция для вывода древовидного представления.
-func (n *Node) printTreeDetailed(prefix string, isLast bool) {
-	// Определяем символы для визуализации.
-	var connector, childPrefix string
-	if isLast {
-		connector = "└── "
-		childPrefix = prefix + "    "
+	h := heaps[i]
+	x := h.Pop()
+	if a[i] > x {
+		h.Push(a[i])
+		*spares = append(*spares, x)
 	} else {
-		connector = "├── "
-		childPrefix = prefix + "│   "
-	}
-	// Выводим информацию об узле.
-	parentInfo := "nil"
-	if n.parent != nil {
-		parentInfo = fmt.Sprintf("%d", n.parent.index+1)
-	}
-	fmt.Printf("%s%s Node %d (weight=%d, parent=%s, children=%d)\n",
-		prefix, connector, n.index+1, n.weight, parentInfo, len(n.children))
-	// Рекурсивно выводим детей.
-	for i, child := range n.children {
-		child.printTreeDetailed(childPrefix, i == len(n.children)-1)
+		h.Push(x)
+		*spares = append(*spares, a[i])
 	}
 }
 
-// Группа.
-type Group struct {
-	nodes     []*Node
-	maxWeight int
-}
+func main() {
+	reader := bufio.NewReaderSize(os.Stdin, 1<<20)
+	writer := bufio.NewWriterSize(os.Stdout, 1<<20)
+	defer writer.Flush()
 
-// Функция печати информации по каждой отдельной группе.
-func (g *Group) PrintGroup(groupIndex int) {
-	if g == nil {
-		fmt.Println("Group is nil")
-		return
-	}
-	fmt.Printf("Group %d (nodes count: %d, max weight: %d)\n", groupIndex, len(g.nodes), g.maxWeight)
-	if len(g.nodes) == 0 {
-		fmt.Println("  (empty group)")
-		return
-	}
-	// Выводим все узлы группы.
-	for i, node := range g.nodes {
-		var prefix string
-		if i == len(g.nodes)-1 {
-			prefix = "└── "
-		} else {
-			prefix = "├── "
+	readInt := func() int {
+		n := 0
+		c, _ := reader.ReadByte()
+		for c == ' ' || c == '\n' || c == '\r' || c == '\t' {
+			c, _ = reader.ReadByte()
 		}
-		// Информация о родителе узла.
-		parentInfo := "nil"
-		if node.parent != nil {
-			parentInfo = fmt.Sprintf("%d", node.parent.index+1)
+		neg := false
+		if c == '-' {
+			neg = true
+			c, _ = reader.ReadByte()
 		}
-		// Информация о детях узла.
-		childrenInfo := "none"
-		if len(node.children) > 0 {
-			childrenInfo = fmt.Sprintf("%v", getChildrenIndexes(node.children))
+		for c >= '0' && c <= '9' {
+			n = n*10 + int(c-'0')
+			c, _ = reader.ReadByte()
 		}
-		fmt.Printf("  %sNode %d (weight=%d, parent=%s, children=[%s])\n",
-			prefix, node.index+1, node.weight, parentInfo, childrenInfo)
+		if neg {
+			n = -n
+		}
+		return n
 	}
-}
 
-// Вспомогательная функция для получения индексов детей узлов.
-func getChildrenIndexes(children []*Node) string {
-	if len(children) == 0 {
-		return ""
+	t := readInt()
+	for ; t > 0; t-- {
+		n := readInt()
+		a := make([]int, n)
+		for i := 0; i < n; i++ {
+			a[i] = readInt()
+		}
+		parent := make([]int, n)
+		for i := 1; i < n; i++ {
+			parent[i] = readInt() - 1
+		}
+
+		result := solve(n, a, parent)
+
+		buf := make([]byte, 0, n*7)
+		for i, v := range result {
+			if i > 0 {
+				buf = append(buf, ' ')
+			}
+			buf = strconv.AppendInt(buf, int64(v), 10)
+		}
+		buf = append(buf, '\n')
+		writer.Write(buf)
 	}
-	indexes := make([]string, len(children))
-	for i, child := range children {
-		indexes[i] = fmt.Sprintf("%d", child.index+1)
-	}
-	return strings.Join(indexes, ", ")
 }
